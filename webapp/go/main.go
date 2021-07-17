@@ -407,6 +407,19 @@ func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err
 	return userSimple, err
 }
 
+func getUserSimpleByIDs(q sqlx.Queryer, userID []int64) (userSimple []UserSimple, err error) {
+	sql, params, err := sqlx.In("SELECT id, account_name, num_sell_items FROM `users` WHERE `id` IN (?)", userID)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = sqlx.Select(q, &userSimple, sql, params...)
+	if err != nil {
+		return userSimple, err
+	}
+	return userSimple, err
+}
+
 func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err error) {
 	err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
 	if category.ParentID != 0 {
@@ -417,6 +430,25 @@ func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err err
 		category.ParentCategoryName = parentCategory.CategoryName
 	}
 	return category, err
+}
+
+func getCategoryByIDs(q sqlx.Queryer, categoryID []int) (categories []Category, err error) {
+	sql, params, err := sqlx.In("SELECT * FROM `categories` WHERE `id` IN (?)", categoryID)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = sqlx.Select(q, &categories, sql, params...)
+	for _, category := range categories {
+		if category.ParentID != 0 {
+			parentCategory, err := getCategoryByID(q, category.ParentID)
+			if err != nil {
+				return categories, err
+			}
+			category.ParentCategoryName = parentCategory.CategoryName
+		}
+	}
+	return categories, err
 }
 
 func getConfigByName(name string) (string, error) {
@@ -913,24 +945,53 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemDetails := []ItemDetail{}
+	sellerIDs := []int64{}
+	buyerIDs := []int64{}
+	categoryIDs := []int{}
+	IDs := []int64{}
 	for _, item := range items {
-		seller, err := getUserSimpleByID(tx, item.SellerID)
-		if err != nil {
-			outputErrorMsg(w, http.StatusNotFound, "seller not found")
-			tx.Rollback()
-			return
-		}
-		category, err := getCategoryByID(tx, item.CategoryID)
-		if err != nil {
-			outputErrorMsg(w, http.StatusNotFound, "category not found")
-			tx.Rollback()
-			return
-		}
+		sellerIDs = append(sellerIDs, item.SellerID)
+		buyerIDs = append(buyerIDs, item.BuyerID)
+		categoryIDs = append(categoryIDs, item.CategoryID)
+		IDs = append(IDs, item.ID)
+	}
+	sellers, err := getUserSimpleByIDs(tx, sellerIDs)
+	if err != nil {
+		outputErrorMsg(w, http.StatusNotFound, "seller not found")
+		tx.Rollback()
+		return
+	}
+	categories, err := getCategoryByIDs(tx, categoryIDs)
+	if err != nil {
+		outputErrorMsg(w, http.StatusNotFound, "category not found")
+		tx.Rollback()
+		return
+	}
+	buyers, err := getUserSimpleByIDs(tx, buyerIDs)
+	if err != nil {
+		outputErrorMsg(w, http.StatusNotFound, "buyer not found")
+		tx.Rollback()
+		return
+	}
+	transactionEvidences := []TransactionEvidence{}
+	sql, params, err := sqlx.In("SELECT * FROM `transaction_evidences` WHERE `item_id` IN (?)", IDs)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = tx.Select(&transactionEvidences, sql, params...)
+	if err != nil && err != sql.ErrNoRows {
+		// It's able to ignore ErrNoRows
+		log.Print(err)
+		outputErrorMsg(w, http.StatusInternalServerError, "db error")
+		tx.Rollback()
+		return
+	}
 
+	for i, item := range items {
 		itemDetail := ItemDetail{
 			ID:       item.ID,
 			SellerID: item.SellerID,
-			Seller:   &seller,
+			Seller:   &sellers[i],
 			// BuyerID
 			// Buyer
 			Status:      item.Status,
@@ -942,34 +1003,17 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			// TransactionEvidenceID
 			// TransactionEvidenceStatus
 			// ShippingStatus
-			Category:  &category,
+			Category:  &categories[i],
 			CreatedAt: item.CreatedAt.Unix(),
 		}
-
 		if item.BuyerID != 0 {
-			buyer, err := getUserSimpleByID(tx, item.BuyerID)
-			if err != nil {
-				outputErrorMsg(w, http.StatusNotFound, "buyer not found")
-				tx.Rollback()
-				return
-			}
 			itemDetail.BuyerID = item.BuyerID
-			itemDetail.Buyer = &buyer
+			itemDetail.Buyer = &buyers[i]
 		}
 
-		transactionEvidence := TransactionEvidence{}
-		err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `item_id` = ?", item.ID)
-		if err != nil && err != sql.ErrNoRows {
-			// It's able to ignore ErrNoRows
-			log.Print(err)
-			outputErrorMsg(w, http.StatusInternalServerError, "db error")
-			tx.Rollback()
-			return
-		}
-
-		if transactionEvidence.ID > 0 {
+		if transactionEvidences[i].ID > 0 {
 			shipping := Shipping{}
-			err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
+			err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidences[i].ID)
 			if err == sql.ErrNoRows {
 				outputErrorMsg(w, http.StatusNotFound, "shipping not found")
 				tx.Rollback()
@@ -991,8 +1035,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			itemDetail.TransactionEvidenceID = transactionEvidence.ID
-			itemDetail.TransactionEvidenceStatus = transactionEvidence.Status
+			itemDetail.TransactionEvidenceID = transactionEvidences[i].ID
+			itemDetail.TransactionEvidenceStatus = transactionEvidences[i].Status
 			itemDetail.ShippingStatus = ssr.Status
 		}
 
