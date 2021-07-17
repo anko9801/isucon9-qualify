@@ -407,19 +407,6 @@ func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err
 	return userSimple, err
 }
 
-func getUserSimpleByIDs(q sqlx.Queryer, userID []int64) (userSimple []UserSimple, err error) {
-	sql, params, err := sqlx.In("SELECT id, account_name, num_sell_items FROM `users` WHERE `id` IN (?)", userID)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = sqlx.Select(q, &userSimple, sql, params...)
-	if err != nil {
-		return userSimple, err
-	}
-	return userSimple, err
-}
-
 func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err error) {
 	err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
 	if category.ParentID != 0 {
@@ -430,25 +417,6 @@ func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err err
 		category.ParentCategoryName = parentCategory.CategoryName
 	}
 	return category, err
-}
-
-func getCategoryByIDs(q sqlx.Queryer, categoryID []int) (categories []Category, err error) {
-	sql, params, err := sqlx.In("SELECT * FROM `categories` WHERE `id` IN (?)", categoryID)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = sqlx.Select(q, &categories, sql, params...)
-	for _, category := range categories {
-		if category.ParentID != 0 {
-			parentCategory, err := getCategoryByID(q, category.ParentID)
-			if err != nil {
-				return categories, err
-			}
-			category.ParentCategoryName = parentCategory.CategoryName
-		}
-	}
-	return categories, err
 }
 
 func getConfigByName(name string) (string, error) {
