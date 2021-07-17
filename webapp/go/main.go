@@ -445,8 +445,9 @@ func getCategoryByIDs(q sqlx.Queryer, categoryID []int) (categories []Category, 
 		log.Fatal(err)
 	}
 
-	err = sqlx.Select(q, &categories, sql, params...)
-	for _, category := range categories {
+	categories2 := []Category2{}
+	err = sqlx.Select(q, &categories2, sql, params...)
+	for _, category := range categories2 {
 		if category.ParentID != 0 && category.ParentCategoryName == "" {
 			parentCategory, err := getCategoryByID(q, category.ParentID)
 			if err != nil {
@@ -455,6 +456,12 @@ func getCategoryByIDs(q sqlx.Queryer, categoryID []int) (categories []Category, 
 			dbx.Exec("UPDATE `categories` SET `parent_category_name` = ? WHERE `id` = ?", parentCategory.CategoryName, category.ID)
 			category.ParentCategoryName = parentCategory.CategoryName
 		}
+		_category := Category{}
+		_category.ID = category.ID
+		_category.ParentID = category.ParentID
+		_category.CategoryName = category.CategoryName
+		_category.ParentCategoryName = category.ParentCategoryName
+		categories = append(categories, _category)
 	}
 	return categories, err
 }
