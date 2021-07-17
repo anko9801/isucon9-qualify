@@ -56,7 +56,7 @@ const (
 	ItemsPerPage        = 48
 	TransactionsPerPage = 100
 
-	BcryptCost = 1
+	BcryptCost = 10
 )
 
 var (
@@ -590,12 +590,6 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemSimples := []ItemSimple{}
-	// sellerIDs := []int64{}
-	// categoryIDs := []int{}
-	// for _, item := range items {
-	// sellerIDs = append(sellerIDs, item.SellerID)
-	// categoryIDs = append(categoryIDs, item.CategoryID)
-	// }
 	for _, item := range items {
 		seller, err := getUserSimpleByID(dbx, item.SellerID)
 		if err != nil {
@@ -961,9 +955,21 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		categoryIDs = append(categoryIDs, item.CategoryID)
 		IDs = append(IDs, item.ID)
 	}
+	sellers, err := getUserSimpleByIDs(tx, sellerIDs)
+	if err != nil {
+		outputErrorMsg(w, http.StatusNotFound, "seller not found")
+		tx.Rollback()
+		return
+	}
 	categories, err := getCategoryByIDs(tx, categoryIDs)
 	if err != nil {
 		outputErrorMsg(w, http.StatusNotFound, "category not found")
+		tx.Rollback()
+		return
+	}
+	buyers, err := getUserSimpleByIDs(tx, buyerIDs)
+	if err != nil {
+		outputErrorMsg(w, http.StatusNotFound, "buyer not found")
 		tx.Rollback()
 		return
 	}
@@ -982,16 +988,10 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for i, item := range items {
-		seller, err := getUserSimpleByID(tx, item.SellerID)
-		if err != nil {
-			outputErrorMsg(w, http.StatusNotFound, "seller not found")
-			tx.Rollback()
-			return
-		}
 		itemDetail := ItemDetail{
 			ID:       item.ID,
 			SellerID: item.SellerID,
-			Seller:   &seller,
+			Seller:   &sellers[i],
 			// BuyerID
 			// Buyer
 			Status:      item.Status,
@@ -1007,14 +1007,8 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			CreatedAt: item.CreatedAt.Unix(),
 		}
 		if item.BuyerID != 0 {
-			buyer, err := getUserSimpleByID(tx, item.BuyerID)
-			if err != nil {
-				outputErrorMsg(w, http.StatusNotFound, "buyer not found")
-				tx.Rollback()
-				return
-			}
 			itemDetail.BuyerID = item.BuyerID
-			itemDetail.Buyer = &buyer
+			itemDetail.Buyer = &buyers[i]
 		}
 
 		if transactionEvidences[i].ID > 0 {
