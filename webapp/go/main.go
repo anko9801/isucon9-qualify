@@ -961,12 +961,6 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		categoryIDs = append(categoryIDs, item.CategoryID)
 		IDs = append(IDs, item.ID)
 	}
-	sellers, err := getUserSimpleByIDs(tx, sellerIDs)
-	if err != nil {
-		outputErrorMsg(w, http.StatusNotFound, "seller not found")
-		tx.Rollback()
-		return
-	}
 	categories, err := getCategoryByIDs(tx, categoryIDs)
 	if err != nil {
 		outputErrorMsg(w, http.StatusNotFound, "category not found")
@@ -988,10 +982,16 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for i, item := range items {
+		seller, err := getUserSimpleByID(tx, item.SellerID)
+		if err != nil {
+			outputErrorMsg(w, http.StatusNotFound, "seller not found")
+			tx.Rollback()
+			return
+		}
 		itemDetail := ItemDetail{
 			ID:       item.ID,
 			SellerID: item.SellerID,
-			Seller:   &sellers[i],
+			Seller:   &seller,
 			// BuyerID
 			// Buyer
 			Status:      item.Status,
