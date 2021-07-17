@@ -591,17 +591,17 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 
 	itemSimples := []ItemSimple{}
 	sellerIDs := []int64{}
-	categoryIDs := []int{}
+	// categoryIDs := []int{}
 	for _, item := range items {
 		sellerIDs = append(sellerIDs, item.SellerID)
-		categoryIDs = append(categoryIDs, item.CategoryID)
+		// categoryIDs = append(categoryIDs, item.CategoryID)
 	}
-	sellers, err := getUserSimpleByIDs(dbx, sellerIDs)
-	if err != nil {
-		outputErrorMsg(w, http.StatusNotFound, "seller not found")
-		return
-	}
-	for i, item := range items {
+	for _, item := range items {
+		seller, err := getUserSimpleByID(dbx, item.SellerID)
+		if err != nil {
+			outputErrorMsg(w, http.StatusNotFound, "seller not found")
+			return
+		}
 		category, err := getCategoryByID(dbx, item.CategoryID)
 		if err != nil {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
@@ -610,7 +610,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		itemSimples = append(itemSimples, ItemSimple{
 			ID:         item.ID,
 			SellerID:   item.SellerID,
-			Seller:     &sellers[i],
+			Seller:     &seller,
 			Status:     item.Status,
 			Name:       item.Name,
 			Price:      item.Price,
