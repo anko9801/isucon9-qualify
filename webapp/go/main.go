@@ -167,6 +167,13 @@ type Category struct {
 	ID                 int    `json:"id" db:"id"`
 	ParentID           int    `json:"parent_id" db:"parent_id"`
 	CategoryName       string `json:"category_name" db:"category_name"`
+	ParentCategoryName string `json:"parent_category_name,omitempty" db:"-"`
+}
+
+type Category2 struct {
+	ID                 int    `json:"id" db:"id"`
+	ParentID           int    `json:"parent_id" db:"parent_id"`
+	CategoryName       string `json:"category_name" db:"category_name"`
 	ParentCategoryName string `json:"parent_category_name,omitempty" db:"parent_category_name"`
 }
 
@@ -432,7 +439,7 @@ func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err err
 	return category, err
 }
 
-func getCategoryByIDs(q sqlx.Queryer, categoryID []int) (categories []Category, err error) {
+func getCategoryByIDs(q sqlx.Queryer, categoryID []int) (categories []Category2, err error) {
 	sql, params, err := sqlx.In("SELECT * FROM `categories` WHERE `id` IN (?)", categoryID)
 	if err != nil {
 		log.Fatal(err)
