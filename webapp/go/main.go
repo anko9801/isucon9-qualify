@@ -973,12 +973,6 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		tx.Rollback()
 		return
 	}
-	buyers, err := getUserSimpleByIDs(tx, buyerIDs)
-	if err != nil {
-		outputErrorMsg(w, http.StatusNotFound, "buyer not found")
-		tx.Rollback()
-		return
-	}
 	transactionEvidences := []TransactionEvidence{}
 	sql, params, err := sqlx.In("SELECT * FROM `transaction_evidences` WHERE `item_id` IN (?)", IDs)
 	if err != nil {
@@ -1013,8 +1007,14 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			CreatedAt: item.CreatedAt.Unix(),
 		}
 		if item.BuyerID != 0 {
+			buyer, err := getUserSimpleByID(tx, item.BuyerID)
+			if err != nil {
+				outputErrorMsg(w, http.StatusNotFound, "buyer not found")
+				tx.Rollback()
+				return
+			}
 			itemDetail.BuyerID = item.BuyerID
-			itemDetail.Buyer = &buyers[i]
+			itemDetail.Buyer = &buyer
 		}
 
 		if transactionEvidences[i].ID > 0 {
