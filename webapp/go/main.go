@@ -601,12 +601,12 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusNotFound, "seller not found")
 		return
 	}
-	categories, err := getCategoryByIDs(dbx, categoryIDs)
-	if err != nil {
-		outputErrorMsg(w, http.StatusNotFound, "category not found")
-		return
-	}
 	for i, item := range items {
+		category, err := getCategoryByID(dbx, item.CategoryID)
+		if err != nil {
+			outputErrorMsg(w, http.StatusNotFound, "category not found")
+			return
+		}
 		itemSimples = append(itemSimples, ItemSimple{
 			ID:         item.ID,
 			SellerID:   item.SellerID,
@@ -616,7 +616,7 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 			Price:      item.Price,
 			ImageURL:   getImageURL(item.ImageName),
 			CategoryID: item.CategoryID,
-			Category:   &categories[i],
+			Category:   &category,
 			CreatedAt:  item.CreatedAt.Unix(),
 		})
 	}
@@ -985,7 +985,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 	err = tx.Select(&transactionEvidences, sql, params...)
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		// It's able to ignore ErrNoRows
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
@@ -1020,11 +1020,11 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		if transactionEvidences[i].ID > 0 {
 			shipping := Shipping{}
 			err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidences[i].ID)
-			// if err == sql.ErrNoRows {
-			// 	outputErrorMsg(w, http.StatusNotFound, "shipping not found")
-			// 	tx.Rollback()
-			// 	return
-			// }
+			if err == sql.ErrNoRows {
+				outputErrorMsg(w, http.StatusNotFound, "shipping not found")
+				tx.Rollback()
+				return
+			}
 			if err != nil {
 				log.Print(err)
 				outputErrorMsg(w, http.StatusInternalServerError, "db error")
