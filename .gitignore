@@ -1,0 +1,10 @@
+*~
+initial-data
+webapp/nodejs/node_modules
+webapp/perl
+webapp/php
+webapp/public
+webapp/python
+webapp/ruby
+webapp/sql/initial.sql
+*.js
