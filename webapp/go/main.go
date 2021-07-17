@@ -167,13 +167,6 @@ type Category struct {
 	ID                 int    `json:"id" db:"id"`
 	ParentID           int    `json:"parent_id" db:"parent_id"`
 	CategoryName       string `json:"category_name" db:"category_name"`
-	ParentCategoryName string `json:"parent_category_name,omitempty" db:"-"`
-}
-
-type Category2 struct {
-	ID                 int    `json:"id" db:"id"`
-	ParentID           int    `json:"parent_id" db:"parent_id"`
-	CategoryName       string `json:"category_name" db:"category_name"`
 	ParentCategoryName string `json:"parent_category_name,omitempty" db:"parent_category_name"`
 }
 
@@ -428,19 +421,14 @@ func getUserSimpleByIDs(q sqlx.Queryer, userID []int64) (userSimple []UserSimple
 }
 
 func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err error) {
-	category2 := Category2{}
-	err = sqlx.Get(q, &category2, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
-	if category.ParentID != 0 && category2.ParentCategoryName == "" {
+	err = sqlx.Get(q, &category, "SELECT id, parent_id, category_name FROM `categories` WHERE `id` = ?", categoryID)
+	if category.ParentID != 0 {
 		parentCategory, err := getCategoryByID(q, category.ParentID)
 		if err != nil {
 			return category, err
 		}
 		category.ParentCategoryName = parentCategory.CategoryName
 	}
-	category.ID = category2.ID
-	category.ParentID = category2.ParentID
-	category.CategoryName = category2.CategoryName
-	category.ParentCategoryName = category2.ParentCategoryName
 	return category, err
 }
 
@@ -450,9 +438,8 @@ func getCategoryByIDs(q sqlx.Queryer, categoryID []int) (categories []Category, 
 		log.Fatal(err)
 	}
 
-	categories2 := []Category2{}
-	err = sqlx.Select(q, &categories2, sql, params...)
-	for _, category := range categories2 {
+	err = sqlx.Select(q, &categories, sql, params...)
+	for _, category := range categories {
 		if category.ParentID != 0 && category.ParentCategoryName == "" {
 			parentCategory, err := getCategoryByID(q, category.ParentID)
 			if err != nil {
@@ -461,12 +448,12 @@ func getCategoryByIDs(q sqlx.Queryer, categoryID []int) (categories []Category, 
 			dbx.Exec("UPDATE `categories` SET `parent_category_name` = ? WHERE `id` = ?", parentCategory.CategoryName, category.ID)
 			category.ParentCategoryName = parentCategory.CategoryName
 		}
-		_category := Category{}
-		_category.ID = category.ID
-		_category.ParentID = category.ParentID
-		_category.CategoryName = category.CategoryName
-		_category.ParentCategoryName = category.ParentCategoryName
-		categories = append(categories, _category)
+		// _category := Category{}
+		// _category.ID = category.ID
+		// _category.ParentID = category.ParentID
+		// _category.CategoryName = category.CategoryName
+		// _category.ParentCategoryName = category.ParentCategoryName
+		// categories = append(categories, _category)
 	}
 	return categories, err
 }
