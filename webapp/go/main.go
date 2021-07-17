@@ -167,7 +167,7 @@ type Category struct {
 	ID                 int    `json:"id" db:"id"`
 	ParentID           int    `json:"parent_id" db:"parent_id"`
 	CategoryName       string `json:"category_name" db:"category_name"`
-	ParentCategoryName string `json:"parent_category_name,omitempty" db:"-"`
+	ParentCategoryName string `json:"parent_category_name,omitempty" db:"parent_category_name"`
 }
 
 type reqInitialize struct {
@@ -440,11 +440,12 @@ func getCategoryByIDs(q sqlx.Queryer, categoryID []int) (categories []Category, 
 
 	err = sqlx.Select(q, &categories, sql, params...)
 	for _, category := range categories {
-		if category.ParentID != 0 {
+		if category.ParentID != 0 && category.ParentCategoryName == "" {
 			parentCategory, err := getCategoryByID(q, category.ParentID)
 			if err != nil {
 				return categories, err
 			}
+			dbx.Exec("UPDATE `categories` SET `parent_category_name` = ? WHERE `id` = ?", parentCategory.CategoryName, category.ID)
 			category.ParentCategoryName = parentCategory.CategoryName
 		}
 	}
