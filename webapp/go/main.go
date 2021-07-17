@@ -54,7 +54,7 @@ const (
 	BumpChargeSeconds = 3 * time.Second
 
 	ItemsPerPage        = 48
-	TransactionsPerPage = 100
+	TransactionsPerPage = 10
 
 	BcryptCost = 10
 )
