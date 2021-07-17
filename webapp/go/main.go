@@ -985,7 +985,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 	err = tx.Select(&transactionEvidences, sql, params...)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil {
 		// It's able to ignore ErrNoRows
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
@@ -1020,11 +1020,11 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		if transactionEvidences[i].ID > 0 {
 			shipping := Shipping{}
 			err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidences[i].ID)
-			if err == sql.ErrNoRows {
-				outputErrorMsg(w, http.StatusNotFound, "shipping not found")
-				tx.Rollback()
-				return
-			}
+			// if err == sql.ErrNoRows {
+			// 	outputErrorMsg(w, http.StatusNotFound, "shipping not found")
+			// 	tx.Rollback()
+			// 	return
+			// }
 			if err != nil {
 				log.Print(err)
 				outputErrorMsg(w, http.StatusInternalServerError, "db error")
