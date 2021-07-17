@@ -590,12 +590,12 @@ func getNewItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemSimples := []ItemSimple{}
-	sellerIDs := []int64{}
+	// sellerIDs := []int64{}
 	// categoryIDs := []int{}
-	for _, item := range items {
-		sellerIDs = append(sellerIDs, item.SellerID)
-		// categoryIDs = append(categoryIDs, item.CategoryID)
-	}
+	// for _, item := range items {
+	// sellerIDs = append(sellerIDs, item.SellerID)
+	// categoryIDs = append(categoryIDs, item.CategoryID)
+	// }
 	for _, item := range items {
 		seller, err := getUserSimpleByID(dbx, item.SellerID)
 		if err != nil {
