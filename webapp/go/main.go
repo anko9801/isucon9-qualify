@@ -421,7 +421,7 @@ func getUserSimpleByIDs(q sqlx.Queryer, userID []int64) (userSimple []UserSimple
 }
 
 func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err error) {
-	err = sqlx.Get(q, &category, "SELECT id, parent_id, category_name FROM `categories` WHERE `id` = ?", categoryID)
+	err = sqlx.Get(q, &category, "SELECT * FROM `categories` WHERE `id` = ?", categoryID)
 	if category.ParentID != 0 {
 		parentCategory, err := getCategoryByID(q, category.ParentID)
 		if err != nil {
@@ -433,27 +433,20 @@ func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err err
 }
 
 func getCategoryByIDs(q sqlx.Queryer, categoryID []int) (categories []Category, err error) {
-	sql, params, err := sqlx.In("SELECT id, parent_id, category_name FROM `categories` WHERE `id` IN (?)", categoryID)
+	sql, params, err := sqlx.In("SELECT * FROM `categories` WHERE `id` IN (?)", categoryID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	err = sqlx.Select(q, &categories, sql, params...)
 	for _, category := range categories {
-		if category.ParentID != 0 && category.ParentCategoryName == "" {
+		if category.ParentID != 0 {
 			parentCategory, err := getCategoryByID(q, category.ParentID)
 			if err != nil {
 				return categories, err
 			}
-			dbx.Exec("UPDATE `categories` SET `parent_category_name` = ? WHERE `id` = ?", parentCategory.CategoryName, category.ID)
 			category.ParentCategoryName = parentCategory.CategoryName
 		}
-		// _category := Category{}
-		// _category.ID = category.ID
-		// _category.ParentID = category.ParentID
-		// _category.CategoryName = category.CategoryName
-		// _category.ParentCategoryName = category.ParentCategoryName
-		// categories = append(categories, _category)
 	}
 	return categories, err
 }
@@ -2211,7 +2204,7 @@ func getSettings(w http.ResponseWriter, r *http.Request) {
 
 	categories := []Category{}
 
-	err := dbx.Select(&categories, "SELECT id, parent_id, category_name FROM `categories`")
+	err := dbx.Select(&categories, "SELECT * FROM `categories`")
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
