@@ -1016,7 +1016,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	for _, t := range transactionEvidences {
 		go func(t TransactionEvidence) {
 			defer wg.Done()
-			ssr, err := APIShipmentStatus(r.Context(), getShipmentServiceURL(r.Context()), &APIShipmentStatusReq{
+			ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
 				ReserveID: t.ReserveID,
 			})
 			if err != nil {
