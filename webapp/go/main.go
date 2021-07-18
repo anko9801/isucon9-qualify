@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1016,9 +1017,19 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	for _, t := range transactionEvidences {
 		go func(t TransactionEvidence) {
 			defer wg.Done()
+			if t.ReserveID == "" {
+				return
+			}
 			ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
 				ReserveID: t.ReserveID,
 			})
+			if err != nil && strings.HasPrefix(err.Error(), "status code: 400; body: <html>") {
+				log.Printf("Retrying (concurrency: %d)", len(transactionEvidences))
+				time.Sleep(10 * time.Millisecond)
+				ssr, err = APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
+					ReserveID: t.ReserveID,
+				})
+			}
 			if err != nil {
 				concurrentError.Store(err)
 				return
@@ -1082,7 +1093,13 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 		transactionEvidence, ok := transactionEvidences[item.ID]
 		if ok {
-			ssr, _ := shipmentStatuses.Load(item.ID)
+			ssr, ok := shipmentStatuses.Load(item.ID)
+			if !ok {
+				outputErrorMsg(w, http.StatusNotFound, "shipping not found")
+				tx.Rollback()
+				return
+			}
+
 			itemDetail.TransactionEvidenceID = transactionEvidence.ID
 			itemDetail.TransactionEvidenceStatus = transactionEvidence.Status
 			itemDetail.ShippingStatus = ssr.(*APIShipmentStatusRes).Status
