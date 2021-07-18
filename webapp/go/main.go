@@ -944,9 +944,47 @@ func getUserItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	itemSimples := []ItemSimple{}
-	for _, item := range items {
-		category, err := getCategoryByID(dbx, item.CategoryID)
+	categoryIdsUnique := make(map[int]struct{})
+	var categoryIds []interface{}
+	tx := dbx.MustBegin()
+	for _, i := range items {
+		catID := i.CategoryID
+		if _, ok := categoryIdsUnique[catID]; !ok {
+			categoryIds = append(categoryIds, catID)
+			categoryIdsUnique[catID] = struct{}{}
+		}
+	}
+	var categories map[int]Category
+	if len(categoryIds) > 0 {
+		query, args, err := sqlx.In("SELECT * FROM `categories` WHERE `id` IN (?)", categoryIds)
 		if err != nil {
+			log.Print(err)
+			outputErrorMsg(w, http.StatusInternalServerError, "db error")
+			tx.Rollback()
+			return
+		}
+		var s []Category
+		err = tx.SelectContext(r.Context(), &s, query, args...)
+		if err != nil {
+			log.Print(err)
+			outputErrorMsg(w, http.StatusInternalServerError, "db error")
+			tx.Rollback()
+			return
+		}
+		categories = make(map[int]Category, len(s))
+		for _, c := range s {
+			if c.ParentID > 0 {
+				p, err := getCategoryByID(tx, c.ParentID)
+				if err == nil {
+					c.ParentCategoryName = p.CategoryName
+				}
+			}
+			categories[c.ID] = c
+		}
+	}
+	for _, item := range items {
+		category, ok := categories[item.CategoryID]
+		if !ok {
 			outputErrorMsg(w, http.StatusNotFound, "category not found")
 			return
 		}
