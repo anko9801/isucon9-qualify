@@ -913,25 +913,24 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	var userIds []interface{}
 	categoryIdsUnique := make(map[int]struct{})
 	var categoryIds []interface{}
-	for _, item := range items {
-		itemIDs = append(itemIDs, item.ID)
-		id := item.SellerID
+	for _, i := range items {
+		itemIDs = append(itemIDs, i.ID)
+		id := i.SellerID
 		if _, ok := userIdUnique[id]; !ok {
 			userIds = append(userIds, id)
 			userIdUnique[id] = struct{}{}
 		}
-		id = item.BuyerID
+		id = i.BuyerID
 		if _, ok := userIdUnique[id]; !ok {
 			userIds = append(userIds, id)
 			userIdUnique[id] = struct{}{}
 		}
-		catID := item.CategoryID
+		catID := i.CategoryID
 		if _, ok := categoryIdsUnique[catID]; !ok {
 			categoryIds = append(categoryIds, catID)
 			categoryIdsUnique[catID] = struct{}{}
 		}
 	}
-
 	var users map[int64]UserSimple
 	if len(userIds) > 0 {
 		query, args, err := sqlx.In("SELECT * FROM `users` WHERE `id` IN (?)", userIds)
@@ -941,8 +940,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			tx.Rollback()
 			return
 		}
-
-		s := []User{}
+		var s []User
 		err = tx.SelectContext(r.Context(), &s, query, args...)
 		if err != nil {
 			log.Print(err)
@@ -968,7 +966,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			tx.Rollback()
 			return
 		}
-		s := []Category{}
+		var s []Category
 		err = tx.SelectContext(r.Context(), &s, query, args...)
 		if err != nil {
 			log.Print(err)
@@ -980,7 +978,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		for _, c := range s {
 			if c.ParentID > 0 {
 				p, err := getCategoryByID(tx, c.ParentID)
-				if err != nil {
+				if err == nil {
 					c.ParentCategoryName = p.CategoryName
 				}
 			}
@@ -1066,7 +1064,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 		if transactionEvidence.ID > 0 {
 			ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
-				ReserveID: transactionEvidences[item.ID].ReserveID,
+				ReserveID: transactionEvidence.ReserveID,
 			})
 			if err != nil {
 				log.Print(err)
