@@ -508,6 +508,7 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	configs := map[string]string{}
 	configs["payment_service_url"] = ri.PaymentServiceURL
 	configs["shipment_service_url"] = ri.ShipmentServiceURL
 
