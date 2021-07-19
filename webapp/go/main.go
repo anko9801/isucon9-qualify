@@ -434,7 +434,7 @@ func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err err
 
 func getConfigByName(name string) (string, error) {
 	val, ok := configs[name]
-	if val != "" && ok {
+	if ok {
 		return val, nil
 	}
 	config := Config{}
@@ -446,7 +446,6 @@ func getConfigByName(name string) (string, error) {
 		log.Print(err)
 		return "", err
 	}
-	configs[name] = config.Val
 	return config.Val, err
 }
 
@@ -509,9 +508,12 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	configs["payment_service_url"] = ri.PaymentServiceURL
+	configs["shipment_service_url"] = ri.ShipmentServiceURL
+
 	res := resInitialize{
 		// キャンペーン実施時には還元率の設定を返す。詳しくはマニュアルを参照のこと。
-		Campaign: 4,
+		Campaign: 2,
 		// 実装言語を返す
 		Language: "Go",
 	}
