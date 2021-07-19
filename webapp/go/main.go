@@ -434,7 +434,7 @@ func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err err
 
 func getConfigByName(name string) (string, error) {
 	val, ok := configs[name]
-	if ok {
+	if val != "" && ok {
 		return val, nil
 	}
 	config := Config{}
