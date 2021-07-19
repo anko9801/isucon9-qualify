@@ -404,7 +404,7 @@ func getUserID(r *http.Request) (user User, errCode int, errMsg string) {
 	if !ok {
 		return user, http.StatusNotFound, "no session"
 	}
-	return User{userID, "", "", "", 0, 0, 0}, 0, ""
+	return User{userID.(int64), "", nil, "", 0, time.Time{}, time.Time{}}, 0, ""
 }
 
 func getUserSimpleByID(q sqlx.Queryer, userID int64) (userSimple UserSimple, err error) {
