@@ -65,6 +65,7 @@ var (
 	templates *template.Template
 	dbx       *sqlx.DB
 	store     sessions.Store
+	configs   map[string]string
 )
 
 type Config struct {
@@ -432,6 +433,10 @@ func getCategoryByID(q sqlx.Queryer, categoryID int) (category Category, err err
 }
 
 func getConfigByName(name string) (string, error) {
+	val, ok := configs[name]
+	if ok {
+		return val, nil
+	}
 	config := Config{}
 	err := dbx.Get(&config, "SELECT * FROM `configs` WHERE `name` = ?", name)
 	if err == sql.ErrNoRows {
@@ -441,6 +446,7 @@ func getConfigByName(name string) (string, error) {
 		log.Print(err)
 		return "", err
 	}
+	configs[name] = config.Val
 	return config.Val, err
 }
 
