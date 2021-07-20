@@ -1141,6 +1141,11 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 		transactionEvidence, ok := transactionEvidences[item.ID]
 		if ok {
+			if transactionEvidence.ShippingStatus == "" {
+				outputErrorMsg(w, http.StatusNotFound, "shipping status is not found")
+				tx.Rollback()
+				return
+			}
 			itemDetail.TransactionEvidenceID = transactionEvidence.ID
 			itemDetail.TransactionEvidenceStatus = transactionEvidence.Status
 			itemDetail.ShippingStatus = transactionEvidence.ShippingStatus
