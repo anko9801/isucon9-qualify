@@ -325,6 +325,10 @@ func main() {
 	}
 	defer dbx.Close()
 
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	mux := goji.NewMux()
 
 	// API
@@ -1142,7 +1146,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 		transactionEvidence, ok := transactionEvidences[item.ID]
 		if ok {
 			if transactionEvidence.ShippingStatus == "" {
-				outputErrorMsg(w, http.StatusNotFound, "shipping status is not found")
+				outputErrorMsg(w, http.StatusNotFound, "shipping not found")
 				tx.Rollback()
 				return
 			}
