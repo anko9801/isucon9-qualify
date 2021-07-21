@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	_ "net/http/pprof"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
@@ -325,10 +327,6 @@ func main() {
 	}
 	defer dbx.Close()
 
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
-
 	mux := goji.NewMux()
 
 	// API
@@ -367,6 +365,9 @@ func main() {
 	// Assets
 	mux.Handle(pat.Get("/*"), http.FileServer(http.Dir("../public")))
 	log.Fatal(http.ListenAndServe(":8000", mux))
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 }
 
 func getSession(r *http.Request) *sessions.Session {
