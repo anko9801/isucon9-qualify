@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	_ "net/http/pprof"
@@ -152,6 +153,7 @@ type TransactionEvidence struct {
 	ItemRootCategoryID int       `json:"item_root_category_id" db:"item_root_category_id"`
 	CreatedAt          time.Time `json:"-" db:"created_at"`
 	UpdatedAt          time.Time `json:"-" db:"updated_at"`
+	ReserveID          string    `json:"-" db:"reserve_id"`
 	ShippingStatus     string    `json:"-" db:"shipping_status"`
 }
 
@@ -1078,7 +1080,7 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 	var transactionEvidences map[int64]TransactionEvidence
 	if len(itemIDs) > 0 {
-		query, args, err := sqlx.In("SELECT c.item_id AS item_id, c.status AS status, s.status AS shipping_status FROM `transaction_evidences` c LEFT JOIN shippings s ON s.transaction_evidence_id = c.id WHERE c.`item_id` IN (?) ", itemIDs)
+		query, args, err := sqlx.In("SELECT c.item_id AS item_id, c.status AS status, s.reserve_id AS reserve_id FROM `transaction_evidences` c LEFT JOIN shippings s ON s.transaction_evidence_id = c.id WHERE c.`item_id` IN (?) ", itemIDs)
 		if err != nil {
 			log.Print(err)
 			outputErrorMsg(w, http.StatusInternalServerError, "db error")
@@ -1098,6 +1100,25 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 			transactionEvidences[c.ItemID] = c
 		}
 	}
+
+	wg := &sync.WaitGroup{}
+	var c atomic.Value
+	var shippings sync.Map
+	for _, t := range transactionEvidences {
+		wg.Add(1)
+		go func(transactionEvidence TransactionEvidence) {
+			defer wg.Done()
+			ssr, err := APIShipmentStatus(getShipmentServiceURL(), &APIShipmentStatusReq{
+				ReserveID: transactionEvidence.ReserveID,
+			})
+			if err != nil {
+				c.Store(transactionEvidence)
+				return
+			}
+			shippings.Store(transactionEvidence.ItemID, ssr)
+		}(t)
+	}
+	wg.Wait()
 
 	itemDetails := []ItemDetail{}
 	for _, item := range items {
@@ -1146,14 +1167,11 @@ func getTransactions(w http.ResponseWriter, r *http.Request) {
 
 		transactionEvidence, ok := transactionEvidences[item.ID]
 		if ok {
-			if transactionEvidence.ShippingStatus == "" {
-				outputErrorMsg(w, http.StatusNotFound, "shipping not found")
-				tx.Rollback()
-				return
-			}
+			ssr, _ := shippings.Load(item.ID)
+
 			itemDetail.TransactionEvidenceID = transactionEvidence.ID
 			itemDetail.TransactionEvidenceStatus = transactionEvidence.Status
-			itemDetail.ShippingStatus = transactionEvidence.ShippingStatus
+			itemDetail.ShippingStatus = ssr.(*APIShipmentStatusRes).Status
 		}
 
 		itemDetails = append(itemDetails, itemDetail)
