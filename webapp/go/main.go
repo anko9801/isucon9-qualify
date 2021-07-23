@@ -1346,6 +1346,7 @@ func postItemEdit(w http.ResponseWriter, r *http.Request) {
 	targetItem, ok = itemMap[itemID]
 	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
+		tx.Rollback()
 		return
 	}
 	itemMapMux.RUnlock()
@@ -1378,6 +1379,7 @@ func postItemEdit(w http.ResponseWriter, r *http.Request) {
 	targetItem, ok = itemMap[itemID]
 	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
+		tx.Rollback()
 		return
 	}
 	itemMapMux.RUnlock()
@@ -1475,6 +1477,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	targetItem, ok := itemMap[rb.ItemID]
 	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
+		tx.Rollback()
 		return
 	}
 	itemMapMux.RUnlock()
@@ -1708,6 +1711,7 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 	item, ok := itemMap[itemID]
 	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
+		tx.Rollback()
 		return
 	}
 	itemMapMux.RUnlock()
@@ -1833,7 +1837,8 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 	itemMapMux.RLock()
 	item, ok := itemMap[itemID]
 	if !ok {
-		outputErrorMsg(w, http.StatusNotFound, "item not found")
+		outputErrorMsg(w, http.StatusNotFound, "items not found")
+		tx.Rollback()
 		return
 	}
 	itemMapMux.RUnlock()
@@ -1973,6 +1978,7 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 	item, ok := itemMap[itemID]
 	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
+		tx.Rollback()
 		return
 	}
 	itemMapMux.RUnlock()
@@ -2266,6 +2272,7 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 	targetItem, ok := itemMap[itemID]
 	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
+		tx.Rollback()
 		return
 	}
 	itemMapMux.RUnlock()
@@ -2328,6 +2335,7 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 	targetItem, ok = itemMap[itemID]
 	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
+		tx.Rollback()
 		return
 	}
 	itemMapMux.RUnlock()
