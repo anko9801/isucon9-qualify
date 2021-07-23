@@ -71,6 +71,7 @@ var (
 	allCategories   []Category
 	categoryByID    map[int]Category
 	childCategories map[int][]int
+	buyingMap       BuyingMap
 )
 
 type Config struct {
@@ -548,6 +549,8 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 			childCategories[c.ID] = children
 		}
 	}
+
+	buyingMap = NewBuyingMap()
 
 	res := resInitialize{
 		// キャンペーン実施時には還元率の設定を返す。詳しくはマニュアルを参照のこと。
@@ -1451,6 +1454,24 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 	w.Write(shipping.ImgBinary)
 }
 
+type BuyingMap struct {
+	s sync.Map
+}
+
+func NewBuyingMap() BuyingMap {
+	return BuyingMap{}
+}
+func (s *BuyingMap) Add(key int64) {
+	s.s.Store(key, struct{}{})
+}
+func (s *BuyingMap) Delete(key int64) {
+	s.s.Delete(key)
+}
+func (s *BuyingMap) Has(key int64) bool {
+	_, ok := s.s.Load(key)
+	return ok
+}
+
 var itemsMux map[int64]*sync.Mutex
 
 func postBuy(w http.ResponseWriter, r *http.Request) {
@@ -1478,17 +1499,18 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx := dbx.MustBegin()
-	itemMux, ok := itemsMux[rb.ItemID]
-	if !ok {
-		itemMux = &sync.Mutex{}
-		itemsMux[rb.ItemID] = itemMux
+	if buyingMap.Has(rb.ItemID) {
+		outputErrorMsg(w, http.StatusTooManyRequests, "now pending")
+		return
 	}
-	itemMux.Lock()
-	defer itemMux.Unlock()
+
+	buyingMap.Add(rb.ItemID)
+	defer buyingMap.Delete(rb.ItemID)
+
+	tx := dbx.MustBegin()
 
 	targetItem := Item{}
-	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", rb.ItemID)
+	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", rb.ItemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
 		tx.Rollback()
@@ -1515,7 +1537,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	seller := User{}
-	err = tx.Get(&seller, "SELECT * FROM `users` WHERE `id` = ?", targetItem.SellerID)
+	err = tx.Get(&seller, "SELECT * FROM `users` WHERE `id` = ? FOR UPDATE", targetItem.SellerID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "seller not found")
 		tx.Rollback()
@@ -1907,7 +1929,7 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 	}
 
 	shipping := Shipping{}
-	err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
+	err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ? FOR UPDATE", transactionEvidence.ID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "shippings not found")
 		tx.Rollback()
@@ -2021,7 +2043,7 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 
 	tx := dbx.MustBegin()
 	item := Item{}
-	err = tx.Get(&item, "SELECT * FROM `items` WHERE `id` = ?", itemID)
+	err = tx.Get(&item, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "items not found")
 		tx.Rollback()
@@ -2040,7 +2062,7 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `item_id` = ?", itemID)
+	err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `item_id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences not found")
 		tx.Rollback()
@@ -2060,7 +2082,7 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	shipping := Shipping{}
-	err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
+	err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ? FOR UPDATE", transactionEvidence.ID)
 	if err != nil {
 		log.Print(err)
 		outputErrorMsg(w, http.StatusInternalServerError, "db error")
