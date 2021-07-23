@@ -1443,12 +1443,12 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 	w.Write(shipping.ImgBinary)
 }
 
-var itemsMux map[int64]*sync.Mutex
+// var itemsMux map[int64]*sync.Mutex
 
 func postBuy(w http.ResponseWriter, r *http.Request) {
-	if itemsMux == nil {
-		itemsMux = map[int64]*sync.Mutex{}
-	}
+	// if itemsMux == nil {
+	// 	itemsMux = map[int64]*sync.Mutex{}
+	// }
 
 	rb := reqBuy{}
 
@@ -1471,13 +1471,13 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tx := dbx.MustBegin()
-	itemMux, ok := itemsMux[rb.ItemID]
-	if !ok {
-		itemMux = &sync.Mutex{}
-		itemsMux[rb.ItemID] = itemMux
-	}
-	itemMux.Lock()
-	defer itemMux.Unlock()
+	// itemMux, ok := itemsMux[rb.ItemID]
+	// if !ok {
+	// 	itemMux = &sync.Mutex{}
+	// 	itemsMux[rb.ItemID] = itemMux
+	// }
+	// itemMux.Lock()
+	// defer itemMux.Unlock()
 
 	targetItem := Item{}
 	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", rb.ItemID)
