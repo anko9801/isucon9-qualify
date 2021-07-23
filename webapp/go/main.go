@@ -71,7 +71,11 @@ var (
 	allCategories   []Category
 	categoryByID    map[int]Category
 	childCategories map[int][]int
-	// itemsMutex      sync.Mutex
+)
+
+var (
+	itemMap    = map[int64]*Item{}
+	itemMapMux = sync.RWMutex{}
 )
 
 type Config struct {
@@ -550,6 +554,8 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	initItemsCache()
+
 	res := resInitialize{
 		// キャンペーン実施時には還元率の設定を返す。詳しくはマニュアルを参照のこと。
 		Campaign: 1,
@@ -559,6 +565,14 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
 	json.NewEncoder(w).Encode(res)
+}
+
+func initItemsCache() {
+	items := []Item{}
+	dbx.Select(&items, "SELECT * FROM `items`")
+	for _, item := range items {
+		itemMap[item.ID] = &item
+	}
 }
 
 func getNewItems(w http.ResponseWriter, r *http.Request) {
@@ -1209,15 +1223,9 @@ func getItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item := Item{}
-	err = dbx.Get(&item, "SELECT * FROM `items` WHERE `id` = ?", itemID)
-	if err == sql.ErrNoRows {
+	item, ok := itemMap[itemID]
+	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
-		return
-	}
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
 
@@ -1322,16 +1330,9 @@ func postItemEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targetItem := Item{}
-	err = dbx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", itemID)
-	if err == sql.ErrNoRows {
+	targetItem, ok := itemMap[itemID]
+	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
-		return
-	}
-	if err != nil {
-		log.Print(err)
-
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
 		return
 	}
 
@@ -1341,14 +1342,13 @@ func postItemEdit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tx := dbx.MustBegin()
-	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
-	if err != nil {
-		log.Print(err)
-
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
+	itemMapMux.RLock()
+	targetItem, ok = itemMap[itemID]
+	if !ok {
+		outputErrorMsg(w, http.StatusNotFound, "item not found")
 		return
 	}
+	itemMapMux.RUnlock()
 
 	if targetItem.Status != ItemStatusOnSale {
 		outputErrorMsg(w, http.StatusForbidden, "販売中の商品以外編集できません")
@@ -1369,13 +1369,18 @@ func postItemEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", itemID)
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
+	itemMapMux.Lock()
+	itemMap[itemID].Price = price
+	itemMap[itemID].UpdatedAt = time.Now()
+	itemMapMux.Unlock()
+
+	itemMapMux.RLock()
+	targetItem, ok = itemMap[itemID]
+	if !ok {
+		outputErrorMsg(w, http.StatusNotFound, "item not found")
 		return
 	}
+	itemMapMux.RUnlock()
 
 	tx.Commit()
 
@@ -1466,21 +1471,13 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tx := dbx.MustBegin()
-	// itemsMutex.Lock()
-	targetItem := Item{}
-	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", rb.ItemID)
-	if err == sql.ErrNoRows {
+	itemMapMux.RLock()
+	targetItem, ok := itemMap[rb.ItemID]
+	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
-		tx.Rollback()
 		return
 	}
-	if err != nil {
-		log.Print(err)
-
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
-		return
-	}
+	itemMapMux.RUnlock()
 
 	if targetItem.Status != ItemStatusOnSale {
 		outputErrorMsg(w, http.StatusForbidden, "item is not for sale")
@@ -1559,6 +1556,12 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		tx.Rollback()
 		return
 	}
+
+	itemMapMux.Lock()
+	itemMap[targetItem.ID].BuyerID = buyer.ID
+	itemMap[targetItem.ID].Status = ItemStatusTrading
+	itemMap[targetItem.ID].UpdatedAt = time.Now()
+	itemMapMux.Unlock()
 
 	wg := &sync.WaitGroup{}
 	var apis sync.Map
@@ -1650,7 +1653,6 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// itemsMutex.Unlock()
 	tx.Commit()
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
@@ -1701,19 +1703,14 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 
 	tx := dbx.MustBegin()
 
-	item := Item{}
-	err = tx.Get(&item, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
-	if err == sql.ErrNoRows {
+	// TODO read only
+	itemMapMux.RLock()
+	item, ok := itemMap[itemID]
+	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
-		tx.Rollback()
 		return
 	}
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
-		return
-	}
+	itemMapMux.RUnlock()
 
 	if item.Status != ItemStatusTrading {
 		outputErrorMsg(w, http.StatusForbidden, "商品が取引中ではありません")
@@ -1832,19 +1829,14 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 
 	tx := dbx.MustBegin()
 
-	item := Item{}
-	err = tx.Get(&item, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
-	if err == sql.ErrNoRows {
-		outputErrorMsg(w, http.StatusNotFound, "items not found")
-		tx.Rollback()
+	// TODO only read
+	itemMapMux.RLock()
+	item, ok := itemMap[itemID]
+	if !ok {
+		outputErrorMsg(w, http.StatusNotFound, "item not found")
 		return
 	}
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
-		return
-	}
+	itemMapMux.RUnlock()
 
 	if item.Status != ItemStatusTrading {
 		outputErrorMsg(w, http.StatusForbidden, "商品が取引中ではありません")
@@ -1977,19 +1969,13 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tx := dbx.MustBegin()
-	item := Item{}
-	err = tx.Get(&item, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
-	if err == sql.ErrNoRows {
-		outputErrorMsg(w, http.StatusNotFound, "items not found")
-		tx.Rollback()
+	itemMapMux.RLock()
+	item, ok := itemMap[itemID]
+	if !ok {
+		outputErrorMsg(w, http.StatusNotFound, "item not found")
 		return
 	}
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
-		return
-	}
+	itemMapMux.RUnlock()
 
 	if item.Status != ItemStatusTrading {
 		outputErrorMsg(w, http.StatusForbidden, "商品が取引中ではありません")
@@ -2080,6 +2066,11 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 		tx.Rollback()
 		return
 	}
+
+	itemMapMux.Lock()
+	itemMap[itemID].Status = ItemStatusSoldOut
+	itemMap[itemID].UpdatedAt = time.Now()
+	itemMapMux.Unlock()
 
 	tx.Commit()
 
@@ -2210,6 +2201,17 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	itemMapMux.Lock()
+	itemMap[itemID].SellerID = seller.ID
+	itemMap[itemID].Status = ItemStatusOnSale
+	itemMap[itemID].Name = name
+	itemMap[itemID].Price = price
+	itemMap[itemID].Description = description
+	itemMap[itemID].ImageName = imgName
+	itemMap[itemID].CategoryID = category.ID
+	itemMap[itemID].UpdatedAt = time.Now()
+	itemMapMux.Unlock()
+
 	now := time.Now()
 	_, err = tx.Exec("UPDATE `users` SET `num_sell_items`=?, `last_bump`=? WHERE `id`=?",
 		seller.NumSellItems+1,
@@ -2260,19 +2262,13 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 
 	tx := dbx.MustBegin()
 
-	targetItem := Item{}
-	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
-	if err == sql.ErrNoRows {
+	itemMapMux.RLock()
+	targetItem, ok := itemMap[itemID]
+	if !ok {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
-		tx.Rollback()
 		return
 	}
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
-		return
-	}
+	itemMapMux.RUnlock()
 
 	if targetItem.SellerID != user.ID {
 		outputErrorMsg(w, http.StatusForbidden, "自分の商品以外は編集できません")
@@ -2313,6 +2309,11 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	itemMapMux.Lock()
+	itemMap[targetItem.ID].CreatedAt = now
+	itemMap[targetItem.ID].UpdatedAt = now
+	itemMapMux.Unlock()
+
 	_, err = tx.Exec("UPDATE `users` SET `last_bump`=? WHERE id=?",
 		now,
 		seller.ID,
@@ -2323,13 +2324,13 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", itemID)
-	if err != nil {
-		log.Print(err)
-		outputErrorMsg(w, http.StatusInternalServerError, "db error")
-		tx.Rollback()
+	itemMapMux.RLock()
+	targetItem, ok = itemMap[itemID]
+	if !ok {
+		outputErrorMsg(w, http.StatusNotFound, "item not found")
 		return
 	}
+	itemMapMux.RUnlock()
 
 	tx.Commit()
 
