@@ -1465,7 +1465,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// tx := dbx.MustBegin()
+	tx := dbx.MustBegin()
 	// itemsMutex.Lock()
 	targetItem := Item{}
 	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", rb.ItemID)
