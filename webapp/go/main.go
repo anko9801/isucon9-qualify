@@ -71,7 +71,7 @@ var (
 	allCategories   []Category
 	categoryByID    map[int]Category
 	childCategories map[int][]int
-	itemsMutex      sync.Mutex
+	// itemsMutex      sync.Mutex
 )
 
 type Config struct {
@@ -1465,8 +1465,8 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx := dbx.MustBegin()
-	itemsMutex.Lock()
+	// tx := dbx.MustBegin()
+	// itemsMutex.Lock()
 	targetItem := Item{}
 	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", rb.ItemID)
 	if err == sql.ErrNoRows {
@@ -1650,7 +1650,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemsMutex.Unlock()
+	// itemsMutex.Unlock()
 	tx.Commit()
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
