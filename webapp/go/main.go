@@ -1443,12 +1443,12 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 	w.Write(shipping.ImgBinary)
 }
 
-// var itemsMux map[int64]*sync.Mutex
+var itemsMux map[int64]*sync.Mutex
 
 func postBuy(w http.ResponseWriter, r *http.Request) {
-	// if itemsMux == nil {
-	// 	itemsMux = map[int64]*sync.Mutex{}
-	// }
+	if itemsMux == nil {
+		itemsMux = map[int64]*sync.Mutex{}
+	}
 
 	rb := reqBuy{}
 
@@ -1471,16 +1471,16 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tx := dbx.MustBegin()
-	// itemMux, ok := itemsMux[rb.ItemID]
-	// if !ok {
-	// 	itemMux = &sync.Mutex{}
-	// 	itemsMux[rb.ItemID] = itemMux
-	// }
-	// itemMux.Lock()
-	// defer itemMux.Unlock()
+	itemMux, ok := itemsMux[rb.ItemID]
+	if !ok {
+		itemMux = &sync.Mutex{}
+		itemsMux[rb.ItemID] = itemMux
+	}
+	itemMux.Lock()
+	defer itemMux.Unlock()
 
 	targetItem := Item{}
-	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", rb.ItemID)
+	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", rb.ItemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
 		tx.Rollback()
@@ -1507,7 +1507,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	seller := User{}
-	err = tx.Get(&seller, "SELECT * FROM `users` WHERE `id` = ? FOR UPDATE", targetItem.SellerID)
+	err = tx.Get(&seller, "SELECT * FROM `users` WHERE `id` = ?", targetItem.SellerID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "seller not found")
 		tx.Rollback()
@@ -1712,6 +1712,14 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 
 	tx := dbx.MustBegin()
 
+	itemMux, ok := itemsMux[itemID]
+	if !ok {
+		itemMux = &sync.Mutex{}
+		itemsMux[itemID] = itemMux
+	}
+	itemMux.Lock()
+	defer itemMux.Unlock()
+
 	item := Item{}
 	err = tx.Get(&item, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
@@ -1844,7 +1852,7 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 	tx := dbx.MustBegin()
 
 	item := Item{}
-	err = tx.Get(&item, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
+	err = tx.Get(&item, "SELECT * FROM `items` WHERE `id` = ?", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "items not found")
 		tx.Rollback()
@@ -1862,6 +1870,14 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 		tx.Rollback()
 		return
 	}
+
+	itemMux, ok := itemsMux[itemID]
+	if !ok {
+		itemMux = &sync.Mutex{}
+		itemsMux[itemID] = itemMux
+	}
+	itemMux.Lock()
+	defer itemMux.Unlock()
 
 	err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `id` = ? FOR UPDATE", transactionEvidence.ID)
 	if err == sql.ErrNoRows {
@@ -1986,6 +2002,14 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusForbidden, "権限がありません")
 		return
 	}
+
+	itemMux, ok := itemsMux[itemID]
+	if !ok {
+		itemMux = &sync.Mutex{}
+		itemsMux[itemID] = itemMux
+	}
+	itemMux.Lock()
+	defer itemMux.Unlock()
 
 	tx := dbx.MustBegin()
 	item := Item{}
@@ -2270,6 +2294,14 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tx := dbx.MustBegin()
+
+	itemMux, ok := itemsMux[itemID]
+	if !ok {
+		itemMux = &sync.Mutex{}
+		itemsMux[itemID] = itemMux
+	}
+	itemMux.Lock()
+	defer itemMux.Unlock()
 
 	targetItem := Item{}
 	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
