@@ -1342,16 +1342,8 @@ func postItemEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemMux, ok := itemsMux[itemID]
-	if !ok {
-		itemMux = &sync.Mutex{}
-		itemsMux[itemID] = itemMux
-	}
-	itemMux.Lock()
-	defer itemMux.Unlock()
-
 	tx := dbx.MustBegin()
-	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", itemID)
+	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
 	if err != nil {
 		log.Print(err)
 
@@ -1472,13 +1464,7 @@ func (s *BuyingMap) Has(key int64) bool {
 	return ok
 }
 
-var itemsMux map[int64]*sync.Mutex
-
 func postBuy(w http.ResponseWriter, r *http.Request) {
-	if itemsMux == nil {
-		itemsMux = map[int64]*sync.Mutex{}
-	}
-
 	rb := reqBuy{}
 
 	err := json.NewDecoder(r.Body).Decode(&rb)
@@ -1498,14 +1484,6 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, errCode, errMsg)
 		return
 	}
-
-	if buyingMap.Has(rb.ItemID) {
-		outputErrorMsg(w, http.StatusTooManyRequests, "now pending")
-		return
-	}
-
-	buyingMap.Add(rb.ItemID)
-	defer buyingMap.Delete(rb.ItemID)
 
 	tx := dbx.MustBegin()
 
@@ -1742,16 +1720,8 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 
 	tx := dbx.MustBegin()
 
-	itemMux, ok := itemsMux[itemID]
-	if !ok {
-		itemMux = &sync.Mutex{}
-		itemsMux[itemID] = itemMux
-	}
-	itemMux.Lock()
-	defer itemMux.Unlock()
-
 	item := Item{}
-	err = tx.Get(&item, "SELECT * FROM `items` WHERE `id` = ?", itemID)
+	err = tx.Get(&item, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
 		tx.Rollback()
@@ -1770,7 +1740,7 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `id` = ?", transactionEvidence.ID)
+	err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `id` = ? FOR UPDATE", transactionEvidence.ID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences not found")
 		tx.Rollback()
@@ -1790,7 +1760,7 @@ func postShip(w http.ResponseWriter, r *http.Request) {
 	}
 
 	shipping := Shipping{}
-	err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ?", transactionEvidence.ID)
+	err = tx.Get(&shipping, "SELECT * FROM `shippings` WHERE `transaction_evidence_id` = ? FOR UPDATE", transactionEvidence.ID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "shippings not found")
 		tx.Rollback()
@@ -1882,7 +1852,7 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 	tx := dbx.MustBegin()
 
 	item := Item{}
-	err = tx.Get(&item, "SELECT * FROM `items` WHERE `id` = ?", itemID)
+	err = tx.Get(&item, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "items not found")
 		tx.Rollback()
@@ -1901,15 +1871,7 @@ func postShipDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	itemMux, ok := itemsMux[itemID]
-	if !ok {
-		itemMux = &sync.Mutex{}
-		itemsMux[itemID] = itemMux
-	}
-	itemMux.Lock()
-	defer itemMux.Unlock()
-
-	err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `id` = ?", transactionEvidence.ID)
+	err = tx.Get(&transactionEvidence, "SELECT * FROM `transaction_evidences` WHERE `id` = ? FOR UPDATE", transactionEvidence.ID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "transaction_evidences not found")
 		tx.Rollback()
@@ -2032,14 +1994,6 @@ func postComplete(w http.ResponseWriter, r *http.Request) {
 		outputErrorMsg(w, http.StatusForbidden, "権限がありません")
 		return
 	}
-
-	itemMux, ok := itemsMux[itemID]
-	if !ok {
-		itemMux = &sync.Mutex{}
-		itemsMux[itemID] = itemMux
-	}
-	itemMux.Lock()
-	defer itemMux.Unlock()
 
 	tx := dbx.MustBegin()
 	item := Item{}
@@ -2325,16 +2279,8 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 
 	tx := dbx.MustBegin()
 
-	itemMux, ok := itemsMux[itemID]
-	if !ok {
-		itemMux = &sync.Mutex{}
-		itemsMux[itemID] = itemMux
-	}
-	itemMux.Lock()
-	defer itemMux.Unlock()
-
 	targetItem := Item{}
-	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", itemID)
+	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", itemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
 		tx.Rollback()
@@ -2354,7 +2300,7 @@ func postBump(w http.ResponseWriter, r *http.Request) {
 	}
 
 	seller := User{}
-	err = tx.Get(&seller, "SELECT * FROM `users` WHERE `id` = ?", user.ID)
+	err = tx.Get(&seller, "SELECT * FROM `users` WHERE `id` = ? FOR UPDATE", user.ID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "user not found")
 		tx.Rollback()
