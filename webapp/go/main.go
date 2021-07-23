@@ -71,7 +71,7 @@ var (
 	allCategories   []Category
 	categoryByID    map[int]Category
 	childCategories map[int][]int
-	buyingMap       BuyingMap
+	// itemsMutex      sync.Mutex
 )
 
 type Config struct {
@@ -549,8 +549,6 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 			childCategories[c.ID] = children
 		}
 	}
-
-	buyingMap = NewBuyingMap()
 
 	res := resInitialize{
 		// キャンペーン実施時には還元率の設定を返す。詳しくはマニュアルを参照のこと。
@@ -1446,24 +1444,6 @@ func getQRCode(w http.ResponseWriter, r *http.Request) {
 	w.Write(shipping.ImgBinary)
 }
 
-type BuyingMap struct {
-	s sync.Map
-}
-
-func NewBuyingMap() BuyingMap {
-	return BuyingMap{}
-}
-func (s *BuyingMap) Add(key int64) {
-	s.s.Store(key, struct{}{})
-}
-func (s *BuyingMap) Delete(key int64) {
-	s.s.Delete(key)
-}
-func (s *BuyingMap) Has(key int64) bool {
-	_, ok := s.s.Load(key)
-	return ok
-}
-
 func postBuy(w http.ResponseWriter, r *http.Request) {
 	rb := reqBuy{}
 
@@ -1485,18 +1465,10 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if buyingMap.Has(rb.ItemID) {
-		outputErrorMsg(w, http.StatusTooManyRequests, "now pending")
-		return
-	}
-
-	buyingMap.Add(rb.ItemID)
-	defer buyingMap.Delete(rb.ItemID)
-
 	tx := dbx.MustBegin()
-
+	// itemsMutex.Lock()
 	targetItem := Item{}
-	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ? FOR UPDATE", rb.ItemID)
+	err = tx.Get(&targetItem, "SELECT * FROM `items` WHERE `id` = ?", rb.ItemID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "item not found")
 		tx.Rollback()
@@ -1523,7 +1495,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	seller := User{}
-	err = tx.Get(&seller, "SELECT * FROM `users` WHERE `id` = ? FOR UPDATE", targetItem.SellerID)
+	err = tx.Get(&seller, "SELECT * FROM `users` WHERE `id` = ?", targetItem.SellerID)
 	if err == sql.ErrNoRows {
 		outputErrorMsg(w, http.StatusNotFound, "seller not found")
 		tx.Rollback()
@@ -1678,6 +1650,7 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// itemsMutex.Unlock()
 	tx.Commit()
 
 	w.Header().Set("Content-Type", "application/json;charset=utf-8")
