@@ -2215,7 +2215,6 @@ func postSell(w http.ResponseWriter, r *http.Request) {
 	itemMap[itemID].Description = description
 	itemMap[itemID].ImageName = imgName
 	itemMap[itemID].CategoryID = category.ID
-	itemMap[itemID].UpdatedAt = time.Now()
 	itemMapMux.Unlock()
 
 	now := time.Now()
