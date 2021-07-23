@@ -1485,6 +1485,14 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if buyingMap.Has(rb.ItemID) {
+		outputErrorMsg(w, http.StatusTooManyRequests, "now pending")
+		return
+	}
+
+	buyingMap.Add(rb.ItemID)
+	defer buyingMap.Delete(rb.ItemID)
+
 	tx := dbx.MustBegin()
 
 	targetItem := Item{}
