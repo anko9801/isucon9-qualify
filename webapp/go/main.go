@@ -518,6 +518,10 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	configs := map[string]string{}
 	configs["payment_service_url"] = ri.PaymentServiceURL
 	configs["shipment_service_url"] = ri.ShipmentServiceURL
