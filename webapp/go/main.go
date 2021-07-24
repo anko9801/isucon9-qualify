@@ -60,7 +60,7 @@ const (
 	ItemsPerPage        = 48
 	TransactionsPerPage = 10
 
-	BcryptCost = 4
+	BcryptCost = 2
 )
 
 var (
