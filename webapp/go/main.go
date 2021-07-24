@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/md5"
 	crand "crypto/rand"
 	"database/sql"
 	"encoding/json"
@@ -24,7 +25,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	goji "goji.io"
 	"goji.io/pat"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -2417,16 +2417,12 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(password))
-	if err == bcrypt.ErrMismatchedHashAndPassword {
-		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
-		return
-	}
-	if err != nil {
-		log.Print(err)
-
-		outputErrorMsg(w, http.StatusInternalServerError, "crypt error")
-		return
+	hash := md5.Sum([]byte(password))
+	for i := 0; i < 16; i++ {
+		if hash[i] != u.HashedPassword[i] {
+			outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
+			return
+		}
 	}
 
 	session := getSession(r)
@@ -2462,13 +2458,7 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
-	if err != nil {
-		log.Print(err)
-
-		outputErrorMsg(w, http.StatusInternalServerError, "error")
-		return
-	}
+	hashedPassword := md5.Sum([]byte(password))
 
 	result, err := dbx.Exec("INSERT INTO `users` (`account_name`, `hashed_password`, `address`) VALUES (?, ?, ?)",
 		accountName,
