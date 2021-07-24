@@ -551,6 +551,9 @@ func postInitialize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	buyingMutexMap = NewBuyingMutexMap()
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 
 	res := resInitialize{
 		// キャンペーン実施時には還元率の設定を返す。詳しくはマニュアルを参照のこと。
@@ -1452,6 +1455,7 @@ type BuyingMutex struct {
 	Result *bool
 	Cond   *sync.Cond
 }
+
 type BuyingMutexMap struct {
 	s sync.Map
 }
@@ -1484,6 +1488,7 @@ func (s *BuyingMutexMap) SetSuccess(key int64) {
 	val, _ := s.Load(key)
 	val.Cond.Broadcast()
 }
+
 func (s *BuyingMutexMap) SetFailure(key int64) {
 	s.SetResult(key, nil)
 
@@ -1520,7 +1525,6 @@ func postBuy(w http.ResponseWriter, r *http.Request) {
 
 	if rb.CSRFToken != getCSRFToken(r) {
 		outputErrorMsg(w, http.StatusUnprocessableEntity, "csrf token error")
-
 		return
 	}
 
