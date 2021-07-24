@@ -2419,7 +2419,7 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 
 	hash := md5.Sum([]byte(password))
 	for i := 0; i < 16; i++ {
-		if hash[i] != u.HashedPassword[15-i] {
+		if hash[i] != u.HashedPassword[i] {
 			outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
 			return
 		}
