@@ -82,7 +82,7 @@ type Config struct {
 type User struct {
 	ID             int64     `json:"id" db:"id"`
 	AccountName    string    `json:"account_name" db:"account_name"`
-	HashedPassword [16]byte  `json:"-" db:"hashed_password"`
+	HashedPassword []byte    `json:"-" db:"hashed_password"`
 	Address        string    `json:"address,omitempty" db:"address"`
 	NumSellItems   int       `json:"num_sell_items" db:"num_sell_items"`
 	LastBump       time.Time `json:"-" db:"last_bump"`
@@ -2414,9 +2414,11 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hash := md5.Sum([]byte(password))
-	if u.HashedPassword != hash {
-		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
-		return
+	for i, c := range hash {
+		if u.HashedPassword[i] != c {
+			outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
+			return
+		}
 	}
 
 	session := getSession(r)
