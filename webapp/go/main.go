@@ -1,8 +1,8 @@
 package main
 
 import (
-	"crypto/md5"
 	crand "crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -2417,9 +2417,9 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hash := md5.Sum([]byte(password))
-	for i := 0; i < 16; i++ {
-		if hash[i] != u.HashedPassword[15-i] {
+	hash := sha256.Sum256([]byte(password))
+	for i := 0; i < 32; i++ {
+		if hash[i] != u.HashedPassword[i] {
 			outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
 			return
 		}
@@ -2458,7 +2458,7 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashedPassword := md5.Sum([]byte(password))
+	hashedPassword := sha256.Sum256([]byte(password))
 
 	result, err := dbx.Exec("INSERT INTO `users` (`account_name`, `hashed_password`, `address`) VALUES (?, ?, ?)",
 		accountName,
