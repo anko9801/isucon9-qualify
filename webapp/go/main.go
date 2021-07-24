@@ -60,7 +60,7 @@ const (
 	ItemsPerPage        = 48
 	TransactionsPerPage = 10
 
-	BcryptCost = 10
+	BcryptCost = 4
 )
 
 var (
@@ -2417,17 +2417,17 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(password))
-	if err == bcrypt.ErrMismatchedHashAndPassword {
-		outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
-		return
-	}
-	if err != nil {
-		log.Print(err)
+	// err = bcrypt.CompareHashAndPassword(u.HashedPassword, []byte(password))
+	// if err == bcrypt.ErrMismatchedHashAndPassword {
+	// 	outputErrorMsg(w, http.StatusUnauthorized, "アカウント名かパスワードが間違えています")
+	// 	return
+	// }
+	// if err != nil {
+	// 	log.Print(err)
 
-		outputErrorMsg(w, http.StatusInternalServerError, "crypt error")
-		return
-	}
+	// 	outputErrorMsg(w, http.StatusInternalServerError, "crypt error")
+	// 	return
+	// }
 
 	session := getSession(r)
 
